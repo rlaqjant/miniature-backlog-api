@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: miniature-backlog-api-test
+
+  # H2 인메모리 데이터베이스 설정
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  # JPA 설정
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true
+    show-sql: true
+
+  # H2 콘솔
+  h2:
+    console:
+      enabled: true
+
+# 서버 설정
+server:
+  port: 0
+
+# 로깅 설정
+logging:
+  level:
+    root: WARN
+    com.rlaqjant.miniature_backlog_api: DEBUG
+
+# CORS 허용 도메인 설정
+app:
+  cors:
+    allowed-origins: http://localhost:3000,http://localhost:5173
+
+# JWT 설정 (테스트용)
+jwt:
+  # 테스트용 Base64 인코딩 시크릿 (256bit)
+  secret: dGVzdC1zZWNyZXQta2V5LWZvci1qd3QtdG9rZW4tMjU2Yml0LW9yLW1vcmU=
+  access-token-validity-ms: 3600000
