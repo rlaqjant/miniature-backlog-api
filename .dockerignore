@@ -1,0 +1,26 @@
+# Git
+.git
+.gitignore
+
+# Gradle
+.gradle
+build
+
+# IDE
+.idea
+*.iml
+.vscode
+
+# 환경 설정
+.env
+.env.*
+!.env.example
+
+# 문서
+*.md
+!README.md
+doc/
+
+# 기타
+.DS_Store
+*.log
