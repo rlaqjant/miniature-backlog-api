@@ -40,3 +40,5 @@ build/
 application-local.yaml
 application-local.yml
 application-local.properties
+
+/doc/temp/

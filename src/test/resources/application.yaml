@@ -44,3 +44,12 @@ jwt:
   # 테스트용 Base64 인코딩 시크릿 (256bit)
   secret: dGVzdC1zZWNyZXQta2V5LWZvci1qd3QtdG9rZW4tMjU2Yml0LW9yLW1vcmU=
   access-token-validity-ms: 3600000
+
+# Cloudflare R2 설정 (테스트용)
+cloudflare:
+  r2:
+    endpoint-url: https://test-account.r2.cloudflarestorage.com
+    access-key-id: test-access-key
+    secret-access-key: test-secret-key
+    bucket-name: test-bucket
+    presign-expiration-minutes: 15
