@@ -70,4 +70,31 @@ public class AuthService {
                 .accessToken(accessToken)
                 .build();
     }
+
+    /**
+     * 토큰 갱신
+     */
+    public TokenResponse refresh(String token) {
+        // 1. 갱신 가능 여부 확인
+        if (!jwtTokenProvider.canRefresh(token)) {
+            throw new BusinessException(ErrorCode.INVALID_TOKEN);
+        }
+
+        // 2. 토큰에서 이메일 추출
+        String email = jwtTokenProvider.getEmailFromExpiredToken(token);
+
+        // 3. 사용자 존재 여부 확인
+        if (!userRepository.existsByEmail(email)) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+
+        // 4. 새 토큰 발급
+        String newAccessToken = jwtTokenProvider.createAccessToken(email);
+
+        log.info("토큰 갱신 완료: {}", email);
+
+        return TokenResponse.builder()
+                .accessToken(newAccessToken)
+                .build();
+    }
 }

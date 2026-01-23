@@ -5,12 +5,15 @@ import com.rlaqjant.miniature_backlog_api.auth.dto.RegisterRequest;
 import com.rlaqjant.miniature_backlog_api.auth.dto.TokenResponse;
 import com.rlaqjant.miniature_backlog_api.auth.service.AuthService;
 import com.rlaqjant.miniature_backlog_api.common.dto.ApiResponse;
+import com.rlaqjant.miniature_backlog_api.common.exception.BusinessException;
+import com.rlaqjant.miniature_backlog_api.common.exception.ErrorCode;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -43,6 +46,24 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<TokenResponse>> login(@Valid @RequestBody LoginRequest request) {
         TokenResponse tokenResponse = authService.login(request);
+        return ResponseEntity.ok(ApiResponse.success(tokenResponse));
+    }
+
+    /**
+     * 토큰 갱신
+     * POST /auth/refresh
+     */
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<TokenResponse>> refresh(
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            throw new BusinessException(ErrorCode.INVALID_TOKEN);
+        }
+
+        String token = authHeader.substring(7);
+        TokenResponse tokenResponse = authService.refresh(token);
+
         return ResponseEntity.ok(ApiResponse.success(tokenResponse));
     }
 }

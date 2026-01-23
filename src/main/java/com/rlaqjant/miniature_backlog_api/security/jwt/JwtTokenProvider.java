@@ -101,6 +101,35 @@ public class JwtTokenProvider {
     }
 
     /**
+     * 만료된 토큰에서 이메일 추출 (갱신용)
+     */
+    public String getEmailFromExpiredToken(String token) {
+        try {
+            return getClaims(token).getSubject();
+        } catch (ExpiredJwtException e) {
+            return e.getClaims().getSubject();
+        }
+    }
+
+    /**
+     * 토큰 갱신 가능 여부 확인
+     * - 서명이 유효해야 함
+     * - 만료되지 않았거나, 만료 후 7일 이내
+     */
+    public boolean canRefresh(String token) {
+        try {
+            getClaims(token);
+            return true;
+        } catch (ExpiredJwtException e) {
+            Date expiration = e.getClaims().getExpiration();
+            long gracePeriodMs = 7 * 24 * 60 * 60 * 1000L; // 7일
+            return System.currentTimeMillis() < expiration.getTime() + gracePeriodMs;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
      * 토큰에서 Claims 추출
      */
     private Claims getClaims(String token) {
