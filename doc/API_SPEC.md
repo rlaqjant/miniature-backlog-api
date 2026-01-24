@@ -1,6 +1,6 @@
 # SinTower API 명세서 (프론트엔드 개발용)
 
-> 최종 수정일: 2026-01-23
+> 최종 수정일: 2026-01-24
 
 ## 목차
 1. [기본 정보](#기본-정보)
@@ -18,7 +18,9 @@
 |------|-----|
 | Base URL | `https://api.sintower.com` (운영) / `http://localhost:8080` (개발) |
 | Content-Type | `application/json` |
-| 인증 방식 | JWT Bearer Token |
+| 인증 방식 | HttpOnly 쿠키 (JWT) |
+| 쿠키 이름 | `access_token` |
+| Credentials | 모든 요청에 `credentials: 'include'` 필수 |
 
 ---
 
@@ -57,62 +59,75 @@
 ┌─────────────┐     로그인 요청      ┌─────────────┐
 │   Frontend  │ ──────────────────▶ │   Backend   │
 │             │ ◀────────────────── │             │
-└─────────────┘   accessToken 반환   └─────────────┘
+└─────────────┘   Set-Cookie 반환    └─────────────┘
        │
-       │  토큰 저장 (메모리/localStorage)
+       │  브라우저가 쿠키 자동 저장 (HttpOnly)
        ▼
-┌─────────────┐   Authorization 헤더  ┌─────────────┐
+┌─────────────┐   쿠키 자동 전송      ┌─────────────┐
 │   Frontend  │ ──────────────────▶ │   Backend   │
-│             │  Bearer {token}      │  (보호된 API) │
-└─────────────┘                      └─────────────┘
+│  (fetch +   │  credentials:include │  (보호된 API) │
+│  credentials)│                      └─────────────┘
+└─────────────┘
        │
        │  토큰 만료 시
        ▼
 ┌─────────────┐   토큰 갱신 요청     ┌─────────────┐
 │   Frontend  │ ──────────────────▶ │   Backend   │
 │             │ ◀────────────────── │             │
-└─────────────┘   새 accessToken     └─────────────┘
+└─────────────┘   새 Set-Cookie      └─────────────┘
 ```
 
 ### 토큰 관리 규칙
 
 | 항목 | 값 | 설명 |
 |------|-----|------|
-| 토큰 유효기간 | 24시간 | 서버 설정에 따라 변경 가능 |
+| 토큰 유효기간 | 1시간 | 서버 설정에 따라 변경 가능 |
 | 갱신 유예기간 | 7일 | 만료 후 7일 이내 갱신 가능 |
-| 저장 위치 권장 | 메모리 또는 httpOnly 쿠키 | localStorage는 XSS 취약 |
+| 저장 위치 | HttpOnly 쿠키 | 브라우저가 자동 관리, XSS 방어 |
+| 쿠키 이름 | `access_token` | 서버에서 자동 설정 |
+
+### 쿠키 설정 (서버에서 전송)
+
+| 환경 | Secure | SameSite | 설명 |
+|------|--------|----------|------|
+| 운영 (HTTPS) | `true` | `None` | 크로스 도메인 쿠키 허용 |
+| 로컬 (HTTP) | `false` | `Lax` | HTTP에서도 동작 |
 
 ### 프론트엔드 구현 가이드
 
-#### 1. 로그인 후 토큰 저장
+#### 1. 로그인 (쿠키 자동 저장)
 ```typescript
-// 로그인 API 호출 후
+// 로그인 API 호출 - credentials: 'include' 필수!
 const response = await fetch('/auth/login', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
+  credentials: 'include', // 쿠키 수신을 위해 필수
   body: JSON.stringify({ email, password })
 });
 
-const { data } = await response.json();
-const accessToken = data.accessToken;
+const result = await response.json();
 
-// 메모리에 저장 (권장)
-authStore.setToken(accessToken);
+if (result.success) {
+  // 쿠키는 브라우저가 자동 저장 (HttpOnly라 JS에서 접근 불가)
+  // 로그인 상태만 관리
+  authStore.setLoggedIn(true);
+}
 ```
 
-#### 2. API 요청 시 토큰 첨부
+#### 2. API 요청 시 (쿠키 자동 전송)
 ```typescript
-// 모든 보호된 API 요청에 Authorization 헤더 필수
+// 모든 요청에 credentials: 'include' 필수
 const response = await fetch('/miniatures', {
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${accessToken}`
-  }
+  headers: { 'Content-Type': 'application/json' },
+  credentials: 'include' // 쿠키 자동 전송
 });
 ```
 
 #### 3. 토큰 갱신 로직 (Axios Interceptor 예시)
 ```typescript
+// Axios 기본 설정
+axios.defaults.withCredentials = true; // 모든 요청에 쿠키 포함
+
 // 응답 인터셉터에서 401 에러 처리
 axios.interceptors.response.use(
   response => response,
@@ -124,16 +139,10 @@ axios.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        // 토큰 갱신 시도
-        const refreshResponse = await axios.post('/auth/refresh', null, {
-          headers: { 'Authorization': `Bearer ${currentToken}` }
-        });
+        // 토큰 갱신 시도 (쿠키 자동 전송)
+        await axios.post('/auth/refresh');
 
-        const newToken = refreshResponse.data.data.accessToken;
-        authStore.setToken(newToken);
-
-        // 원래 요청 재시도
-        originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
+        // 갱신 성공 → 원래 요청 재시도
         return axios(originalRequest);
 
       } catch (refreshError) {
@@ -149,30 +158,39 @@ axios.interceptors.response.use(
 );
 ```
 
-#### 4. 앱 시작 시 토큰 검증
+#### 4. 앱 시작 시 인증 상태 확인
 ```typescript
-// 앱 초기화 시 저장된 토큰이 있다면 갱신 시도
+// 앱 초기화 시 토큰 갱신으로 인증 상태 확인
 async function initializeAuth() {
-  const storedToken = localStorage.getItem('accessToken');
+  try {
+    // 쿠키가 있으면 갱신 시도
+    const response = await fetch('/auth/refresh', {
+      method: 'POST',
+      credentials: 'include'
+    });
 
-  if (storedToken) {
-    try {
-      const response = await fetch('/auth/refresh', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${storedToken}` }
-      });
-
-      if (response.ok) {
-        const { data } = await response.json();
-        authStore.setToken(data.accessToken);
-      } else {
-        // 갱신 실패 → 토큰 삭제, 로그인 페이지로
-        authStore.logout();
-      }
-    } catch (e) {
-      authStore.logout();
+    if (response.ok) {
+      authStore.setLoggedIn(true);
+    } else {
+      authStore.setLoggedIn(false);
     }
+  } catch (e) {
+    authStore.setLoggedIn(false);
   }
+}
+```
+
+#### 5. 로그아웃
+```typescript
+// 로그아웃 - 서버에서 쿠키 삭제
+async function logout() {
+  await fetch('/auth/logout', {
+    method: 'POST',
+    credentials: 'include'
+  });
+
+  authStore.setLoggedIn(false);
+  router.push('/login');
 }
 ```
 
@@ -232,15 +250,23 @@ async function initializeAuth() {
 | password | string | O | - |
 
 **응답 (200 OK)**
+
+응답 헤더:
+```
+Set-Cookie: access_token=eyJhbGciOiJIUzI1NiJ9...; Path=/; Max-Age=3600; HttpOnly; Secure; SameSite=None
+```
+
+응답 본문:
 ```json
 {
   "success": true,
-  "data": {
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-  },
-  "timestamp": "2026-01-23T10:00:00"
+  "message": "로그인 성공",
+  "timestamp": "2026-01-24T10:00:00"
 }
 ```
+
+> **참고**: JWT 토큰은 응답 본문이 아닌 `Set-Cookie` 헤더로 전달됩니다.
+> 프론트엔드에서 `credentials: 'include'` 옵션을 사용해야 쿠키가 저장됩니다.
 
 **에러**
 | 상황 | 코드 | HTTP |
@@ -255,34 +281,69 @@ async function initializeAuth() {
 **요청**
 ```
 POST /auth/refresh
-Authorization: Bearer {현재_토큰}
+Cookie: access_token={현재_토큰}
 ```
 - Body 없음
+- 쿠키로 토큰 전송 (`credentials: 'include'` 사용 시 자동)
 - 만료된 토큰도 7일 이내면 갱신 가능
 
 **응답 (200 OK)**
+
+응답 헤더:
+```
+Set-Cookie: access_token=eyJhbGciOiJIUzI1NiJ9...; Path=/; Max-Age=3600; HttpOnly; Secure; SameSite=None
+```
+
+응답 본문:
 ```json
 {
   "success": true,
-  "data": {
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-  },
-  "timestamp": "2026-01-23T10:00:00"
+  "message": "토큰 갱신 성공",
+  "timestamp": "2026-01-24T10:00:00"
 }
 ```
 
 **에러**
 | 상황 | 코드 | HTTP | 프론트엔드 처리 |
 |------|------|------|----------------|
-| 토큰 없음/형식 오류 | E2002 | 401 | 로그인 페이지로 이동 |
+| 쿠키 없음/토큰 없음 | E2002 | 401 | 로그인 페이지로 이동 |
 | 갱신 불가 (7일 초과) | E2002 | 401 | 로그인 페이지로 이동 |
 | 사용자 삭제됨 | E3000 | 404 | 로그인 페이지로 이동 |
 
 ---
 
+#### POST /auth/logout - 로그아웃
+
+**요청**
+```
+POST /auth/logout
+```
+- Body 없음
+- 인증 불필요 (쿠키 삭제만 수행)
+
+**응답 (200 OK)**
+
+응답 헤더:
+```
+Set-Cookie: access_token=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=None
+```
+
+응답 본문:
+```json
+{
+  "success": true,
+  "message": "로그아웃 성공",
+  "timestamp": "2026-01-24T10:00:00"
+}
+```
+
+> **참고**: `Max-Age=0`으로 쿠키가 즉시 삭제됩니다.
+
+---
+
 ### 2. 미니어처 (Miniatures) - 인증 필요
 
-> 모든 요청에 `Authorization: Bearer {token}` 헤더 필수
+> 모든 요청에 `credentials: 'include'` 옵션 필수 (쿠키 자동 전송)
 
 #### GET /miniatures - 내 백로그 목록 조회
 
@@ -741,10 +802,9 @@ interface RegisterRequest {
   nickname: string;
 }
 
-/** 토큰 응답 */
-interface TokenResponse {
-  accessToken: string;
-}
+/** 인증 응답 (로그인/갱신/로그아웃) */
+// 토큰은 Set-Cookie 헤더로 전달되므로 응답 본문에 토큰 없음
+// success와 message만 확인
 
 // ==================== 미니어처 ====================
 
@@ -856,18 +916,16 @@ interface ImageResponse {
 ```typescript
 const API_BASE_URL = 'http://localhost:8080';
 
-// 공통 fetch 헬퍼
+// 공통 fetch 헬퍼 (쿠키 기반 인증)
 async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
-  const token = authStore.getToken();
-
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
+    credentials: 'include', // 쿠키 자동 전송/수신 필수!
     headers: {
       'Content-Type': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` }),
       ...options.headers,
     },
   });
@@ -882,13 +940,15 @@ async function apiRequest<T>(
 }
 
 // 사용 예시
-// 로그인
-const loginResult = await apiRequest<TokenResponse>('/auth/login', {
+
+// 로그인 (Set-Cookie로 토큰 자동 저장)
+const loginResult = await apiRequest<void>('/auth/login', {
   method: 'POST',
   body: JSON.stringify({ email: 'user@example.com', password: 'password123' })
 });
+// loginResult.success === true 면 로그인 성공, 쿠키 자동 저장됨
 
-// 미니어처 목록 조회
+// 미니어처 목록 조회 (쿠키 자동 전송)
 const miniatures = await apiRequest<MiniatureResponse[]>('/miniatures');
 
 // 미니어처 생성
@@ -896,4 +956,26 @@ const newMiniature = await apiRequest<MiniatureDetailResponse>('/miniatures', {
   method: 'POST',
   body: JSON.stringify({ title: '스페이스 마린', description: '울트라마린' })
 });
+
+// 로그아웃 (쿠키 삭제)
+await apiRequest<void>('/auth/logout', { method: 'POST' });
+```
+
+### Axios 설정 예시
+
+```typescript
+import axios from 'axios';
+
+const api = axios.create({
+  baseURL: 'http://localhost:8080',
+  withCredentials: true, // 쿠키 자동 전송/수신 필수!
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// 사용 예시
+await api.post('/auth/login', { email, password });
+const { data } = await api.get('/miniatures');
+await api.post('/auth/logout');
 ```

@@ -62,10 +62,21 @@ API 명세는 `doc/miniature_backlog_prd_and_api.md` 참조.
 
 ## 인증/인가
 
-- JWT 기반 인증
-- 보호된 API는 `Authorization: Bearer <JWT>` 헤더 필수
+- JWT 기반 인증 (HttpOnly 쿠키 방식)
+- 로그인 시 `Set-Cookie` 헤더로 토큰 전달 (`access_token`)
+- 인증이 필요한 API 호출 시 쿠키 자동 전송 (프론트엔드에서 `credentials: 'include'` 필요)
+- Authorization 헤더 방식도 하위 호환성 유지
 - 개인 백로그: 소유자만 접근
 - 공개 로그: 전체 공개
+
+### 인증 관련 엔드포인트
+
+| 엔드포인트 | 설명 |
+|------------|------|
+| `POST /auth/login` | 로그인, 성공 시 `Set-Cookie`로 토큰 전달 |
+| `POST /auth/refresh` | 쿠키의 토큰 갱신 |
+| `POST /auth/logout` | 쿠키 삭제 (로그아웃) |
+| `POST /auth/register` | 회원가입 |
 
 ## 이미지 처리
 
@@ -76,7 +87,8 @@ API 명세는 `doc/miniature_backlog_prd_and_api.md` 참조.
 ## CORS 정책
 
 - 허용 Origin: 프론트엔드 도메인, 개발용 localhost
-- JWT 방식 → Allow-Credentials 비활성화
+- HttpOnly 쿠키 사용 → `Allow-Credentials: true`
+- 프론트엔드에서 `credentials: 'include'` 옵션 필수
 
 ## 패키지명 참고
 
@@ -95,7 +107,7 @@ com.rlaqjant.miniature_backlog_api/
 │   ├── dto/          # 공통 DTO (ApiResponse)
 │   └── exception/    # 예외 처리 (ErrorCode, BusinessException, GlobalExceptionHandler)
 ├── security/
-│   ├── jwt/          # JWT 관련 (JwtTokenProvider, JwtAuthenticationFilter)
+│   ├── jwt/          # JWT 관련 (JwtTokenProvider, JwtAuthenticationFilter, JwtCookieUtil)
 │   ├── userdetails/  # UserDetails 구현
 │   └── handler/      # 인증/인가 핸들러
 ├── auth/             # 인증 도메인

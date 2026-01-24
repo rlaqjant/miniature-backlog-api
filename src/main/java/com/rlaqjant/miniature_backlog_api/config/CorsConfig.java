@@ -12,7 +12,7 @@ import java.util.List;
 
 /**
  * CORS 설정
- * JWT 기반 인증 사용으로 credentials 비활성화
+ * HttpOnly 쿠키 기반 JWT 인증으로 credentials 활성화
  */
 @Configuration
 public class CorsConfig {
@@ -37,8 +37,8 @@ public class CorsConfig {
         // 노출 헤더 (클라이언트에서 접근 가능한 응답 헤더)
         configuration.setExposedHeaders(Arrays.asList("Authorization"));
 
-        // JWT 사용으로 credentials 비활성화
-        configuration.setAllowCredentials(false);
+        // HttpOnly 쿠키 사용으로 credentials 활성화
+        configuration.setAllowCredentials(true);
 
         // preflight 요청 캐시 시간 (1시간)
         configuration.setMaxAge(3600L);

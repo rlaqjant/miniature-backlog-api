@@ -20,6 +20,7 @@ import java.io.IOException;
 /**
  * JWT 인증 필터
  * 모든 요청에서 JWT 토큰을 검증하고 인증 정보를 설정
+ * 쿠키 또는 Authorization 헤더에서 토큰 추출
  */
 @Slf4j
 @Component
@@ -31,6 +32,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final CustomUserDetailsService userDetailsService;
+    private final JwtCookieUtil jwtCookieUtil;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -63,11 +65,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     /**
-     * Authorization 헤더에서 Bearer 토큰 추출
+     * 토큰 추출 (우선순위: 쿠키 > Authorization 헤더)
      */
     private String resolveToken(HttpServletRequest request) {
-        String bearerToken = request.getHeader(AUTHORIZATION_HEADER);
+        // 1. 쿠키에서 토큰 추출 시도
+        String token = jwtCookieUtil.getTokenFromCookies(request);
+        if (StringUtils.hasText(token)) {
+            return token;
+        }
 
+        // 2. Authorization 헤더에서 토큰 추출 (하위 호환성)
+        String bearerToken = request.getHeader(AUTHORIZATION_HEADER);
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith(BEARER_PREFIX)) {
             return bearerToken.substring(BEARER_PREFIX.length());
         }
