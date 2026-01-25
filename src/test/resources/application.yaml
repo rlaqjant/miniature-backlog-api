@@ -53,3 +53,4 @@ cloudflare:
     secret-access-key: test-secret-key
     bucket-name: test-bucket
     presign-expiration-minutes: 15
+    public-url-base: https://test-public.r2.dev

@@ -19,6 +19,7 @@ public class ImageResponse {
     private String objectKey;
     private String fileName;
     private String contentType;
+    private String imageUrl;
     private LocalDateTime createdAt;
 
     /**
@@ -31,6 +32,21 @@ public class ImageResponse {
                 .objectKey(image.getObjectKey())
                 .fileName(image.getFileName())
                 .contentType(image.getContentType())
+                .createdAt(image.getCreatedAt())
+                .build();
+    }
+
+    /**
+     * 엔티티를 응답 DTO로 변환 (이미지 URL 포함)
+     */
+    public static ImageResponse from(Image image, String imageUrl) {
+        return ImageResponse.builder()
+                .id(image.getId())
+                .progressLogId(image.getProgressLogId())
+                .objectKey(image.getObjectKey())
+                .fileName(image.getFileName())
+                .contentType(image.getContentType())
+                .imageUrl(imageUrl)
                 .createdAt(image.getCreatedAt())
                 .build();
     }

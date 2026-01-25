@@ -13,6 +13,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
@@ -31,12 +33,9 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ImageService {
 
-    // 안전한 파일명 패턴 (Path Traversal 방지)
-    private static final Pattern SAFE_FILENAME_PATTERN = Pattern.compile("^[a-zA-Z0-9가-힣._-]+$");
-
-    // ObjectKey 형식 패턴: users/{userId}/{UUID}_{fileName}
+    // ObjectKey 형식 패턴: users/{userId}/{UUID}.{ext}
     private static final Pattern VALID_OBJECT_KEY_PATTERN =
-            Pattern.compile("^users/\\d+/[a-f0-9-]{36}_[a-zA-Z0-9가-힣._-]+$");
+            Pattern.compile("^users/\\d+/[a-f0-9-]{36}\\.(png|jpg|jpeg|gif|webp)$");
 
     private final S3Presigner s3Presigner;
     private final String r2BucketName;
@@ -46,16 +45,19 @@ public class ImageService {
     @Value("${cloudflare.r2.presign-expiration-minutes}")
     private int presignExpirationMinutes;
 
+    @Value("${cloudflare.r2.public-url-base:}")
+    private String publicUrlBase;
+
     /**
      * Presigned URL 발급
      * 클라이언트가 직접 R2에 업로드할 수 있는 URL 생성
      */
     public PresignResponse generatePresignedUrl(PresignRequest request, Long userId) {
-        // 파일명 2차 검증 (Defense in Depth)
-        validateFileName(request.getFileName());
+        // ContentType에서 확장자 추출
+        String extension = getExtensionFromContentType(request.getContentType());
 
-        // 고유한 object key 생성: users/{userId}/{UUID}_{원본파일명}
-        String objectKey = generateObjectKey(userId, request.getFileName());
+        // 고유한 object key 생성: users/{userId}/{UUID}.{ext}
+        String objectKey = generateObjectKey(userId, extension);
 
         // Presigned PUT URL 생성
         PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
@@ -94,7 +96,7 @@ public class ImageService {
             throw new BusinessException(ErrorCode.ACCESS_DENIED);
         }
 
-        // ObjectKey에서 파일명 추출 (형식: users/{userId}/{UUID}_{fileName})
+        // ObjectKey에서 파일명 추출 (형식: users/{userId}/{UUID}.{ext})
         String fileName = extractFileNameFromObjectKey(request.getObjectKey());
         String contentType = inferContentType(fileName);
 
@@ -109,41 +111,86 @@ public class ImageService {
         Image savedImage = imageRepository.save(image);
         log.info("이미지 메타데이터 저장 완료: imageId={}, progressLogId={}", savedImage.getId(), request.getProgressLogId());
 
-        return ImageResponse.from(savedImage);
+        // 읽기용 presigned URL 생성
+        String imageUrl = generateReadPresignedUrl(savedImage.getObjectKey());
+        return ImageResponse.from(savedImage, imageUrl);
+    }
+
+    /**
+     * 진행 로그별 이미지 목록 조회 (비공개용 - presigned URL)
+     */
+    public List<ImageResponse> getImagesByProgressLogId(Long progressLogId) {
+        return getImagesByProgressLogId(progressLogId, false);
     }
 
     /**
      * 진행 로그별 이미지 목록 조회
+     * @param progressLogId 진행 로그 ID
+     * @param isPublic true: 공개 URL, false: presigned URL
      */
-    public List<ImageResponse> getImagesByProgressLogId(Long progressLogId) {
+    public List<ImageResponse> getImagesByProgressLogId(Long progressLogId, boolean isPublic) {
         return imageRepository.findByProgressLogIdOrderByCreatedAtAsc(progressLogId).stream()
-                .map(ImageResponse::from)
+                .map(image -> {
+                    String imageUrl = isPublic
+                            ? generatePublicUrl(image.getObjectKey())
+                            : generateReadPresignedUrl(image.getObjectKey());
+                    return ImageResponse.from(image, imageUrl);
+                })
                 .collect(Collectors.toList());
     }
 
     /**
-     * 고유한 Object Key 생성
-     * PRD 형식: users/{userId}/{UUID}_{원본파일명}
+     * 비공개 이미지용 Presigned URL 생성 (15분 유효)
      */
-    private String generateObjectKey(Long userId, String originalFileName) {
-        String uuid = UUID.randomUUID().toString();
-        return String.format("users/%d/%s_%s", userId, uuid, originalFileName);
+    public String generateReadPresignedUrl(String objectKey) {
+        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+                .signatureDuration(Duration.ofMinutes(presignExpirationMinutes))
+                .getObjectRequest(builder -> builder
+                        .bucket(r2BucketName)
+                        .key(objectKey))
+                .build();
+
+        PresignedGetObjectRequest presignedRequest = s3Presigner.presignGetObject(presignRequest);
+        return presignedRequest.url().toString();
     }
 
     /**
-     * 파일명 검증 (2차 방어, Defense in Depth)
-     * Path Traversal 및 허용되지 않은 문자 차단
+     * 공개 이미지용 공개 URL 생성
+     * R2_PUBLIC_URL_BASE 미설정 시 presigned URL로 폴백
      */
-    private void validateFileName(String fileName) {
-        if (!SAFE_FILENAME_PATTERN.matcher(fileName).matches()) {
-            log.warn("유효하지 않은 파일명 감지: {}", fileName);
-            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE, "파일명에 허용되지 않은 문자가 포함되어 있습니다.");
+    public String generatePublicUrl(String objectKey) {
+        if (publicUrlBase == null || publicUrlBase.isBlank()) {
+            // 공개 URL 미설정 시 presigned URL로 폴백
+            return generateReadPresignedUrl(objectKey);
         }
+        return publicUrlBase + "/" + objectKey;
+    }
+
+    /**
+     * 고유한 Object Key 생성
+     * 형식: users/{userId}/{UUID}.{ext}
+     */
+    private String generateObjectKey(Long userId, String extension) {
+        String uuid = UUID.randomUUID().toString();
+        return String.format("users/%d/%s.%s", userId, uuid, extension);
+    }
+
+    /**
+     * ContentType에서 확장자 추출
+     */
+    private String getExtensionFromContentType(String contentType) {
+        return switch (contentType) {
+            case "image/png" -> "png";
+            case "image/jpeg" -> "jpg";
+            case "image/gif" -> "gif";
+            case "image/webp" -> "webp";
+            default -> "bin";
+        };
     }
 
     /**
      * ObjectKey 검증
-     * - 형식 검증: users/{userId}/{UUID}_{fileName}
+     * - 형식 검증: users/{userId}/{UUID}.{ext}
      * - 소유권 검증: ObjectKey의 userId가 인증된 사용자와 일치하는지 확인
      */
     private void validateObjectKey(String objectKey, Long userId) {
@@ -153,7 +200,7 @@ public class ImageService {
         }
 
         // ObjectKey에서 userId 추출하여 소유권 검증
-        // 형식: users/{userId}/{UUID}_{fileName}
+        // 형식: users/{userId}/{UUID}.{ext}
         String[] parts = objectKey.split("/");
         Long objectKeyUserId = Long.parseLong(parts[1]);
 
@@ -165,14 +212,10 @@ public class ImageService {
 
     /**
      * ObjectKey에서 파일명 추출
-     * 형식: users/{userId}/{UUID}_{fileName} -> fileName
+     * 형식: users/{userId}/{UUID}.{ext} -> {UUID}.{ext}
      */
     private String extractFileNameFromObjectKey(String objectKey) {
-        // users/5/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee_test.png
-        String lastPart = objectKey.substring(objectKey.lastIndexOf("/") + 1);
-        // aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee_test.png -> test.png
-        int underscoreIndex = lastPart.indexOf("_");
-        return lastPart.substring(underscoreIndex + 1);
+        return objectKey.substring(objectKey.lastIndexOf("/") + 1);
     }
 
     /**

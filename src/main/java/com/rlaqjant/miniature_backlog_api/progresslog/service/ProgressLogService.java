@@ -2,6 +2,8 @@ package com.rlaqjant.miniature_backlog_api.progresslog.service;
 
 import com.rlaqjant.miniature_backlog_api.common.exception.BusinessException;
 import com.rlaqjant.miniature_backlog_api.common.exception.ErrorCode;
+import com.rlaqjant.miniature_backlog_api.image.dto.ImageResponse;
+import com.rlaqjant.miniature_backlog_api.image.service.ImageService;
 import com.rlaqjant.miniature_backlog_api.miniature.domain.Miniature;
 import com.rlaqjant.miniature_backlog_api.miniature.repository.MiniatureRepository;
 import com.rlaqjant.miniature_backlog_api.progresslog.domain.ProgressLog;
@@ -19,6 +21,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -35,6 +39,7 @@ public class ProgressLogService {
     private final ProgressLogRepository progressLogRepository;
     private final MiniatureRepository miniatureRepository;
     private final UserRepository userRepository;
+    private final ImageService imageService;
 
     /**
      * 진행 로그 작성
@@ -62,7 +67,8 @@ public class ProgressLogService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-        return ProgressLogResponse.of(savedLog, miniature.getTitle(), user.getNickname());
+        // 4. 새로 생성된 로그이므로 이미지는 빈 배열
+        return ProgressLogResponse.of(savedLog, miniature.getTitle(), user.getNickname(), Collections.emptyList());
     }
 
     /**
@@ -84,10 +90,11 @@ public class ProgressLogService {
         Page<ProgressLog> progressLogs = progressLogRepository
                 .findByMiniatureIdOrderByCreatedAtDesc(miniatureId, pageable);
 
-        // 4. Response 변환
-        Page<ProgressLogResponse> responsePage = progressLogs.map(
-                log -> ProgressLogResponse.of(log, miniature.getTitle(), user.getNickname())
-        );
+        // 4. Response 변환 (이미지 포함)
+        Page<ProgressLogResponse> responsePage = progressLogs.map(progressLog -> {
+            List<ImageResponse> images = imageService.getImagesByProgressLogId(progressLog.getId());
+            return ProgressLogResponse.of(progressLog, miniature.getTitle(), user.getNickname(), images);
+        });
 
         return ProgressLogPageResponse.from(responsePage);
     }
@@ -116,14 +123,16 @@ public class ProgressLogService {
         Map<Long, String> userNicknames = userRepository.findAllById(userIds).stream()
                 .collect(Collectors.toMap(User::getId, User::getNickname));
 
-        // Response 변환
-        Page<ProgressLogResponse> responsePage = progressLogs.map(log ->
-                ProgressLogResponse.of(
-                        log,
-                        miniatureTitles.getOrDefault(log.getMiniatureId(), ""),
-                        userNicknames.getOrDefault(log.getUserId(), "")
-                )
-        );
+        // Response 변환 (공개 URL 사용)
+        Page<ProgressLogResponse> responsePage = progressLogs.map(progressLog -> {
+            List<ImageResponse> images = imageService.getImagesByProgressLogId(progressLog.getId(), true);
+            return ProgressLogResponse.of(
+                    progressLog,
+                    miniatureTitles.getOrDefault(progressLog.getMiniatureId(), ""),
+                    userNicknames.getOrDefault(progressLog.getUserId(), ""),
+                    images
+            );
+        });
 
         return ProgressLogPageResponse.from(responsePage);
     }
