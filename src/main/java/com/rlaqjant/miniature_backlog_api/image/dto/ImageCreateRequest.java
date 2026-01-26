@@ -21,7 +21,7 @@ public class ImageCreateRequest {
 
     @NotBlank(message = "Object Key는 필수입니다.")
     @Size(max = 500, message = "Object Key는 500자 이하여야 합니다.")
-    @Pattern(regexp = "^users/\\d+/[a-f0-9-]{36}_[a-zA-Z0-9가-힣._-]+$",
+    @Pattern(regexp = "^users/\\d+/[a-f0-9-]{36}\\.(png|jpg|jpeg|gif|webp)$",
             message = "유효하지 않은 Object Key 형식입니다.")
     private String objectKey;
 }
