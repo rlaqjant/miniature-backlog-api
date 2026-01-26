@@ -71,4 +71,4 @@ jobs:
 
       - name: External healthcheck (api domain)
         run: |
-          curl -fsS "https://api.paintlater.org/actuator/health" >/dev/null
+          curl -fsS "https://api.paintlater.org/health" >/dev/null
