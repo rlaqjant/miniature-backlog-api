@@ -10,6 +10,7 @@ import com.rlaqjant.miniature_backlog_api.miniature.domain.Miniature;
 import com.rlaqjant.miniature_backlog_api.miniature.dto.MiniatureCreateRequest;
 import com.rlaqjant.miniature_backlog_api.miniature.dto.MiniatureDetailResponse;
 import com.rlaqjant.miniature_backlog_api.miniature.dto.MiniatureResponse;
+import com.rlaqjant.miniature_backlog_api.miniature.dto.MiniatureUpdateRequest;
 import com.rlaqjant.miniature_backlog_api.miniature.repository.MiniatureRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -100,6 +101,27 @@ public class MiniatureService {
                 .toList();
 
         // 4. 진행률 계산
+        int progress = calculateProgress(miniatureId);
+
+        return MiniatureDetailResponse.of(miniature, progress, backlogItemResponses);
+    }
+
+    /**
+     * 백로그 수정 (부분 업데이트)
+     */
+    @Transactional
+    public MiniatureDetailResponse updateMiniature(Long miniatureId, Long userId, MiniatureUpdateRequest request) {
+        Miniature miniature = miniatureRepository.findById(miniatureId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MINIATURE_NOT_FOUND));
+        validateOwnership(miniature, userId);
+
+        miniature.update(request.getTitle(), request.getDescription(), request.getIsPublic());
+
+        List<BacklogItem> backlogItems = backlogItemRepository
+                .findByMiniatureIdOrderByOrderIndexAsc(miniatureId);
+        List<BacklogItemResponse> backlogItemResponses = backlogItems.stream()
+                .map(BacklogItemResponse::from)
+                .toList();
         int progress = calculateProgress(miniatureId);
 
         return MiniatureDetailResponse.of(miniature, progress, backlogItemResponses);

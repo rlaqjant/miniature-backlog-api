@@ -4,6 +4,7 @@ import com.rlaqjant.miniature_backlog_api.common.dto.ApiResponse;
 import com.rlaqjant.miniature_backlog_api.miniature.dto.MiniatureCreateRequest;
 import com.rlaqjant.miniature_backlog_api.miniature.dto.MiniatureDetailResponse;
 import com.rlaqjant.miniature_backlog_api.miniature.dto.MiniatureResponse;
+import com.rlaqjant.miniature_backlog_api.miniature.dto.MiniatureUpdateRequest;
 import com.rlaqjant.miniature_backlog_api.miniature.service.MiniatureService;
 import com.rlaqjant.miniature_backlog_api.security.userdetails.CustomUserDetails;
 import jakarta.validation.Valid;
@@ -66,5 +67,20 @@ public class MiniatureController {
         MiniatureDetailResponse response = miniatureService.getMiniatureDetail(
                 id, userDetails.getUserId());
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    /**
+     * 백로그 수정 (부분 업데이트)
+     * PATCH /miniatures/{id}
+     */
+    @PatchMapping("/{id}")
+    public ResponseEntity<ApiResponse<MiniatureDetailResponse>> updateMiniature(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long id,
+            @Valid @RequestBody MiniatureUpdateRequest request
+    ) {
+        MiniatureDetailResponse response = miniatureService.updateMiniature(
+                id, userDetails.getUserId(), request);
+        return ResponseEntity.ok(ApiResponse.success("백로그가 수정되었습니다.", response));
     }
 }

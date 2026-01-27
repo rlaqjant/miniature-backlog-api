@@ -40,6 +40,16 @@ public class Miniature {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    /**
+     * 부분 수정 (PATCH 시맨틱)
+     * null이 아닌 필드만 업데이트
+     */
+    public void update(String title, String description, Boolean isPublic) {
+        if (title != null) this.title = title;
+        if (description != null) this.description = description;
+        if (isPublic != null) this.isPublic = isPublic;
+    }
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
