@@ -12,6 +12,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
@@ -37,6 +39,7 @@ public class ImageService {
     private static final Pattern VALID_OBJECT_KEY_PATTERN =
             Pattern.compile("^users/\\d+/[a-f0-9-]{36}\\.(png|jpg|jpeg|gif|webp)$");
 
+    private final S3Client s3Client;
     private final S3Presigner s3Presigner;
     private final String r2BucketName;
     private final ImageRepository imageRepository;
@@ -216,6 +219,34 @@ public class ImageService {
      */
     private String extractFileNameFromObjectKey(String objectKey) {
         return objectKey.substring(objectKey.lastIndexOf("/") + 1);
+    }
+
+    /**
+     * R2 오브젝트 단건 삭제 (best-effort)
+     * 삭제 실패 시 warn 로그만 남기고 예외를 전파하지 않음
+     */
+    public void deleteR2Object(String objectKey) {
+        try {
+            DeleteObjectRequest deleteRequest = DeleteObjectRequest.builder()
+                    .bucket(r2BucketName)
+                    .key(objectKey)
+                    .build();
+            s3Client.deleteObject(deleteRequest);
+        } catch (Exception e) {
+            log.warn("R2 오브젝트 삭제 실패 (고아 파일 발생): objectKey={}, error={}",
+                    objectKey, e.getMessage());
+        }
+    }
+
+    /**
+     * R2 오브젝트 일괄 삭제 (best-effort)
+     * 각 오브젝트를 개별 삭제하며 실패 시 로그만 남김
+     */
+    public void deleteR2Objects(List<String> objectKeys) {
+        for (String objectKey : objectKeys) {
+            deleteR2Object(objectKey);
+        }
+        log.info("R2 오브젝트 일괄 삭제 시도 완료: 총 {}건", objectKeys.size());
     }
 
     /**

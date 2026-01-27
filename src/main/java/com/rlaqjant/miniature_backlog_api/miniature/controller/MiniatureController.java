@@ -83,4 +83,17 @@ public class MiniatureController {
                 id, userDetails.getUserId(), request);
         return ResponseEntity.ok(ApiResponse.success("백로그가 수정되었습니다.", response));
     }
+
+    /**
+     * 백로그 삭제
+     * DELETE /miniatures/{id}
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteMiniature(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long id
+    ) {
+        miniatureService.deleteMiniature(id, userDetails.getUserId());
+        return ResponseEntity.ok(ApiResponse.success());
+    }
 }

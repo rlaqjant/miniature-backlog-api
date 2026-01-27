@@ -16,4 +16,14 @@ public interface ImageRepository extends JpaRepository<Image, Long> {
      * 진행 로그 ID로 이미지 목록 조회
      */
     List<Image> findByProgressLogIdOrderByCreatedAtAsc(Long progressLogId);
+
+    /**
+     * 여러 진행 로그 ID로 이미지 목록 조회
+     */
+    List<Image> findByProgressLogIdIn(List<Long> progressLogIds);
+
+    /**
+     * 여러 진행 로그 ID로 이미지 일괄 삭제
+     */
+    void deleteByProgressLogIdIn(List<Long> progressLogIds);
 }

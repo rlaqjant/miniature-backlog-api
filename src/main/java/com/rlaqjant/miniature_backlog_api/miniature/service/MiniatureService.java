@@ -6,12 +6,17 @@ import com.rlaqjant.miniature_backlog_api.backlogitem.dto.BacklogItemResponse;
 import com.rlaqjant.miniature_backlog_api.backlogitem.repository.BacklogItemRepository;
 import com.rlaqjant.miniature_backlog_api.common.exception.BusinessException;
 import com.rlaqjant.miniature_backlog_api.common.exception.ErrorCode;
+import com.rlaqjant.miniature_backlog_api.image.domain.Image;
+import com.rlaqjant.miniature_backlog_api.image.repository.ImageRepository;
+import com.rlaqjant.miniature_backlog_api.image.service.ImageService;
 import com.rlaqjant.miniature_backlog_api.miniature.domain.Miniature;
 import com.rlaqjant.miniature_backlog_api.miniature.dto.MiniatureCreateRequest;
 import com.rlaqjant.miniature_backlog_api.miniature.dto.MiniatureDetailResponse;
 import com.rlaqjant.miniature_backlog_api.miniature.dto.MiniatureResponse;
 import com.rlaqjant.miniature_backlog_api.miniature.dto.MiniatureUpdateRequest;
 import com.rlaqjant.miniature_backlog_api.miniature.repository.MiniatureRepository;
+import com.rlaqjant.miniature_backlog_api.progresslog.domain.ProgressLog;
+import com.rlaqjant.miniature_backlog_api.progresslog.repository.ProgressLogRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -32,6 +37,9 @@ public class MiniatureService {
 
     private final MiniatureRepository miniatureRepository;
     private final BacklogItemRepository backlogItemRepository;
+    private final ProgressLogRepository progressLogRepository;
+    private final ImageRepository imageRepository;
+    private final ImageService imageService;
 
     // 기본 백로그 항목 이름
     private static final List<String> DEFAULT_BACKLOG_STEPS = Arrays.asList(
@@ -125,6 +133,52 @@ public class MiniatureService {
         int progress = calculateProgress(miniatureId);
 
         return MiniatureDetailResponse.of(miniature, progress, backlogItemResponses);
+    }
+
+    /**
+     * 백로그 삭제 (연쇄 삭제: Image → ProgressLog → BacklogItem → Miniature)
+     */
+    @Transactional
+    public void deleteMiniature(Long miniatureId, Long userId) {
+        // 1. Miniature 조회 + 소유권 검증
+        Miniature miniature = miniatureRepository.findById(miniatureId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MINIATURE_NOT_FOUND));
+        validateOwnership(miniature, userId);
+
+        // 2. ProgressLog 목록 조회 → progressLogIds 수집
+        List<ProgressLog> progressLogs = progressLogRepository.findByMiniatureId(miniatureId);
+        List<Long> progressLogIds = progressLogs.stream()
+                .map(ProgressLog::getId)
+                .toList();
+
+        // 3. Image 목록 조회 (progressLogIds) → objectKeys 수집
+        List<String> objectKeysToDelete = new ArrayList<>();
+        if (!progressLogIds.isEmpty()) {
+            List<Image> images = imageRepository.findByProgressLogIdIn(progressLogIds);
+            objectKeysToDelete = images.stream()
+                    .map(Image::getObjectKey)
+                    .toList();
+
+            // 4-1. DB 삭제: Image
+            imageRepository.deleteByProgressLogIdIn(progressLogIds);
+        }
+
+        // 4-2. DB 삭제: ProgressLog
+        progressLogRepository.deleteByMiniatureId(miniatureId);
+
+        // 4-3. DB 삭제: BacklogItem
+        backlogItemRepository.deleteByMiniatureId(miniatureId);
+
+        // 4-4. DB 삭제: Miniature
+        miniatureRepository.delete(miniature);
+
+        // 5. R2 오브젝트 삭제 (best-effort, 실패해도 DB 삭제 유지)
+        if (!objectKeysToDelete.isEmpty()) {
+            imageService.deleteR2Objects(objectKeysToDelete);
+        }
+
+        log.info("미니어처 삭제 완료: miniatureId={}, userId={}, R2 대상 오브젝트 {}건",
+                miniatureId, userId, objectKeysToDelete.size());
     }
 
     /**

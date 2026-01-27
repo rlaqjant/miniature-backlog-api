@@ -27,4 +27,9 @@ public interface BacklogItemRepository extends JpaRepository<BacklogItem, Long> 
      * 미니어처 ID로 백로그 항목 개수 조회
      */
     long countByMiniatureId(Long miniatureId);
+
+    /**
+     * 미니어처 ID로 백로그 항목 일괄 삭제
+     */
+    void deleteByMiniatureId(Long miniatureId);
 }
