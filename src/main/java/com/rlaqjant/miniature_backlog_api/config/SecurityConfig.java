@@ -51,7 +51,6 @@ public class SecurityConfig {
                         // 공개 엔드포인트
                         .requestMatchers("/health").permitAll()
                         .requestMatchers("/auth/**").permitAll()
-                        .requestMatchers("/public/**").permitAll()
                         // 나머지는 인증 필요
                         .anyRequest().authenticated()
                 )

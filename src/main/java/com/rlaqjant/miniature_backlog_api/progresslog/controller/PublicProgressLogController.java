@@ -11,7 +11,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * 공개 진행 로그 컨트롤러 (인증 불필요)
+ * 공개 게시판 컨트롤러 (인증 필요)
  */
 @RestController
 @RequestMapping("/public/progress-logs")
