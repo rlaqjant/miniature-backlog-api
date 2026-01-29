@@ -43,9 +43,10 @@ public class MiniatureService {
 
     // 기본 백로그 항목 이름
     private static final List<String> DEFAULT_BACKLOG_STEPS = Arrays.asList(
-            "베이스 코트",
-            "음영 처리",
-            "드라이브러시",
+            "언박싱",
+            "조립",
+            "프라이밍",
+            "도색",
             "마무리"
     );
 
