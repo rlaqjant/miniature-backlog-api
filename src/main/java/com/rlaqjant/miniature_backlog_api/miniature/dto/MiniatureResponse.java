@@ -18,18 +18,22 @@ public class MiniatureResponse {
     private String title;
     private Boolean isPublic;
     private Integer progress;
+    private String currentStep;
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
 
     /**
-     * Entity + 진행률로 Response 생성
+     * Entity + 진행률 + 현재 단계로 Response 생성
      */
-    public static MiniatureResponse of(Miniature miniature, int progress) {
+    public static MiniatureResponse of(Miniature miniature, int progress, String currentStep) {
         return MiniatureResponse.builder()
                 .id(miniature.getId())
                 .title(miniature.getTitle())
                 .isPublic(miniature.getIsPublic())
                 .progress(progress)
+                .currentStep(currentStep)
                 .createdAt(miniature.getCreatedAt())
+                .updatedAt(miniature.getUpdatedAt())
                 .build();
     }
 }

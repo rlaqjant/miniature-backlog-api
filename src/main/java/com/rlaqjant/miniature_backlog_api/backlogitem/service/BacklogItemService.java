@@ -14,6 +14,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 /**
  * 백로그 항목 서비스
  */
@@ -38,9 +40,36 @@ public class BacklogItemService {
         // 2. 소유권 검증 (BacklogItem → Miniature → userId)
         validateOwnership(backlogItem.getMiniatureId(), userId);
 
-        // 3. 상태 변경
+        // 3. 상태 변경 (역방향 캐스케이드 포함)
+        BacklogItemStatus oldStatus = backlogItem.getStatus();
         backlogItem.updateStatus(request.getStatus());
         log.info("백로그 항목 상태 변경: id={}, status={}", backlogItemId, request.getStatus());
+
+        // 역방향 캐스케이드: DONE → non-DONE 전환 시 이후 단계 초기화
+        if (oldStatus == BacklogItemStatus.DONE && request.getStatus() != BacklogItemStatus.DONE) {
+            List<BacklogItem> allItems = backlogItemRepository
+                    .findByMiniatureIdOrderByOrderIndexAsc(backlogItem.getMiniatureId());
+            for (BacklogItem item : allItems) {
+                if (item.getOrderIndex() > backlogItem.getOrderIndex()
+                        && item.getStatus() != BacklogItemStatus.TODO) {
+                    item.updateStatus(BacklogItemStatus.TODO);
+                }
+            }
+        }
+
+        // 순방향 캐스케이드: non-DONE → IN_PROGRESS/DONE 전환 시 이전 단계 자동 완료
+        if (oldStatus != BacklogItemStatus.DONE
+                && (request.getStatus() == BacklogItemStatus.IN_PROGRESS
+                    || request.getStatus() == BacklogItemStatus.DONE)) {
+            List<BacklogItem> allItems = backlogItemRepository
+                    .findByMiniatureIdOrderByOrderIndexAsc(backlogItem.getMiniatureId());
+            for (BacklogItem item : allItems) {
+                if (item.getOrderIndex() < backlogItem.getOrderIndex()
+                        && item.getStatus() != BacklogItemStatus.DONE) {
+                    item.updateStatus(BacklogItemStatus.DONE);
+                }
+            }
+        }
 
         // 4. 진행률 계산
         int progress = calculateProgress(backlogItem.getMiniatureId());

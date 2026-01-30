@@ -53,15 +53,28 @@ public class MiniatureService {
     );
 
     /**
-     * 내 백로그 목록 조회
+     * 내 백로그 목록 조회 (N+1 → 2쿼리 최적화)
      */
     public List<MiniatureResponse> getMyMiniatures(Long userId) {
         List<Miniature> miniatures = miniatureRepository.findByUserIdOrderByCreatedAtDesc(userId);
 
+        // 미니어처 ID 목록으로 backlogItem 일괄 조회
+        List<Long> miniatureIds = miniatures.stream()
+                .map(Miniature::getId)
+                .toList();
+
+        Map<Long, List<BacklogItem>> backlogItemsMap = backlogItemRepository
+                .findByMiniatureIdInOrderByMiniatureIdAscOrderIndexAsc(miniatureIds)
+                .stream()
+                .collect(Collectors.groupingBy(BacklogItem::getMiniatureId));
+
         return miniatures.stream()
                 .map(miniature -> {
-                    int progress = calculateProgress(miniature.getId());
-                    return MiniatureResponse.of(miniature, progress);
+                    List<BacklogItem> items = backlogItemsMap.getOrDefault(
+                            miniature.getId(), Collections.emptyList());
+                    int progress = calculateProgressFromItems(items);
+                    String currentStep = calculateCurrentStep(items);
+                    return MiniatureResponse.of(miniature, progress, currentStep);
                 })
                 .toList();
     }
@@ -255,6 +268,57 @@ public class MiniatureService {
     }
 
     /**
+     * 단계 일괄 변경 (칸반 드래그)
+     */
+    @Transactional
+    public MiniatureResponse updateCurrentStep(Long miniatureId, Long userId, MiniatureStepUpdateRequest request) {
+        // 1. Miniature 조회 + 소유권 검증
+        Miniature miniature = miniatureRepository.findById(miniatureId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MINIATURE_NOT_FOUND));
+        validateOwnership(miniature, userId);
+
+        // 2. 모든 backlogItem 조회
+        List<BacklogItem> items = backlogItemRepository
+                .findByMiniatureIdOrderByOrderIndexAsc(miniatureId);
+
+        // 3. 단계에 따라 일괄 상태 변경
+        String targetStep = request.getCurrentStep();
+        if ("시작전".equals(targetStep)) {
+            // 전부 TODO
+            items.forEach(item -> item.updateStatus(BacklogItemStatus.TODO));
+        } else if ("완료".equals(targetStep)) {
+            // 전부 DONE
+            items.forEach(item -> item.updateStatus(BacklogItemStatus.DONE));
+        } else {
+            // 해당 step 이하 DONE, 이후 TODO
+            int targetIndex = -1;
+            for (BacklogItem item : items) {
+                if (item.getStepName().equals(targetStep)) {
+                    targetIndex = item.getOrderIndex();
+                    break;
+                }
+            }
+            if (targetIndex < 0) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+            }
+            for (BacklogItem item : items) {
+                if (item.getOrderIndex() <= targetIndex) {
+                    item.updateStatus(BacklogItemStatus.DONE);
+                } else {
+                    item.updateStatus(BacklogItemStatus.TODO);
+                }
+            }
+        }
+
+        log.info("미니어처 단계 일괄 변경: miniatureId={}, targetStep={}", miniatureId, targetStep);
+
+        // 4. Response 생성
+        int progress = calculateProgressFromItems(items);
+        String currentStep = calculateCurrentStep(items);
+        return MiniatureResponse.of(miniature, progress, currentStep);
+    }
+
+    /**
      * 진행률 계산 (DONE 개수 / 전체 개수 * 100)
      */
     private int calculateProgress(Long miniatureId) {
@@ -265,6 +329,50 @@ public class MiniatureService {
         long done = backlogItemRepository.countByMiniatureIdAndStatus(
                 miniatureId, BacklogItemStatus.DONE);
         return (int) Math.round((double) done / total * 100);
+    }
+
+    /**
+     * 아이템 목록에서 진행률 계산
+     */
+    private int calculateProgressFromItems(List<BacklogItem> items) {
+        if (items.isEmpty()) {
+            return 0;
+        }
+        long done = items.stream()
+                .filter(item -> item.getStatus() == BacklogItemStatus.DONE)
+                .count();
+        return (int) Math.round((double) done / items.size() * 100);
+    }
+
+    /**
+     * 현재 단계 계산 (연속 DONE 기반)
+     * - 0개 DONE → "시작전"
+     * - 모두 DONE → "완료"
+     * - N개 연속 DONE → N번째 step의 stepName
+     */
+    private String calculateCurrentStep(List<BacklogItem> items) {
+        if (items.isEmpty()) {
+            return "시작전";
+        }
+
+        // 처음부터 연속으로 DONE인 개수 세기
+        int consecutiveDone = 0;
+        for (BacklogItem item : items) {
+            if (item.getStatus() == BacklogItemStatus.DONE) {
+                consecutiveDone++;
+            } else {
+                break;
+            }
+        }
+
+        if (consecutiveDone == 0) {
+            return "시작전";
+        }
+        if (consecutiveDone == items.size()) {
+            return "완료";
+        }
+        // 연속 DONE 마지막 아이템의 stepName 반환
+        return items.get(consecutiveDone - 1).getStepName();
     }
 
     /**

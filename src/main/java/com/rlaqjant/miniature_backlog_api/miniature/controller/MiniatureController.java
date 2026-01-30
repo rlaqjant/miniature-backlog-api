@@ -4,6 +4,7 @@ import com.rlaqjant.miniature_backlog_api.common.dto.ApiResponse;
 import com.rlaqjant.miniature_backlog_api.miniature.dto.MiniatureCreateRequest;
 import com.rlaqjant.miniature_backlog_api.miniature.dto.MiniatureDetailResponse;
 import com.rlaqjant.miniature_backlog_api.miniature.dto.MiniatureResponse;
+import com.rlaqjant.miniature_backlog_api.miniature.dto.MiniatureStepUpdateRequest;
 import com.rlaqjant.miniature_backlog_api.miniature.dto.MiniatureUpdateRequest;
 import com.rlaqjant.miniature_backlog_api.miniature.service.MiniatureService;
 import com.rlaqjant.miniature_backlog_api.security.userdetails.CustomUserDetails;
@@ -95,5 +96,20 @@ public class MiniatureController {
     ) {
         miniatureService.deleteMiniature(id, userDetails.getUserId());
         return ResponseEntity.ok(ApiResponse.success());
+    }
+
+    /**
+     * 단계 일괄 변경 (칸반 드래그)
+     * PATCH /miniatures/{id}/current-step
+     */
+    @PatchMapping("/{id}/current-step")
+    public ResponseEntity<ApiResponse<MiniatureResponse>> updateCurrentStep(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long id,
+            @Valid @RequestBody MiniatureStepUpdateRequest request
+    ) {
+        MiniatureResponse response = miniatureService.updateCurrentStep(
+                id, userDetails.getUserId(), request);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

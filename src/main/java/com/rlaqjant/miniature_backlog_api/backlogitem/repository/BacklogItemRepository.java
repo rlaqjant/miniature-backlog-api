@@ -29,6 +29,11 @@ public interface BacklogItemRepository extends JpaRepository<BacklogItem, Long> 
     long countByMiniatureId(Long miniatureId);
 
     /**
+     * 미니어처 ID 목록으로 백로그 항목 일괄 조회 (배치)
+     */
+    List<BacklogItem> findByMiniatureIdInOrderByMiniatureIdAscOrderIndexAsc(List<Long> miniatureIds);
+
+    /**
      * 미니어처 ID로 백로그 항목 일괄 삭제
      */
     void deleteByMiniatureId(Long miniatureId);
