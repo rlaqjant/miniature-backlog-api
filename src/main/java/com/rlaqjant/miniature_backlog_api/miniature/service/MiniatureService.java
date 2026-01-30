@@ -10,21 +10,22 @@ import com.rlaqjant.miniature_backlog_api.image.domain.Image;
 import com.rlaqjant.miniature_backlog_api.image.repository.ImageRepository;
 import com.rlaqjant.miniature_backlog_api.image.service.ImageService;
 import com.rlaqjant.miniature_backlog_api.miniature.domain.Miniature;
-import com.rlaqjant.miniature_backlog_api.miniature.dto.MiniatureCreateRequest;
-import com.rlaqjant.miniature_backlog_api.miniature.dto.MiniatureDetailResponse;
-import com.rlaqjant.miniature_backlog_api.miniature.dto.MiniatureResponse;
-import com.rlaqjant.miniature_backlog_api.miniature.dto.MiniatureUpdateRequest;
+import com.rlaqjant.miniature_backlog_api.miniature.dto.*;
 import com.rlaqjant.miniature_backlog_api.miniature.repository.MiniatureRepository;
 import com.rlaqjant.miniature_backlog_api.progresslog.domain.ProgressLog;
 import com.rlaqjant.miniature_backlog_api.progresslog.repository.ProgressLogRepository;
+import com.rlaqjant.miniature_backlog_api.user.domain.User;
+import com.rlaqjant.miniature_backlog_api.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 미니어처 서비스
@@ -40,6 +41,7 @@ public class MiniatureService {
     private final ProgressLogRepository progressLogRepository;
     private final ImageRepository imageRepository;
     private final ImageService imageService;
+    private final UserRepository userRepository;
 
     // 기본 백로그 항목 이름
     private static final List<String> DEFAULT_BACKLOG_STEPS = Arrays.asList(
@@ -180,6 +182,57 @@ public class MiniatureService {
 
         log.info("미니어처 삭제 완료: miniatureId={}, userId={}, R2 대상 오브젝트 {}건",
                 miniatureId, userId, objectKeysToDelete.size());
+    }
+
+    /**
+     * 공개 미니어처 목록 조회 (페이지네이션)
+     */
+    public PublicMiniaturePageResponse getPublicMiniatures(int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Miniature> miniatures = miniatureRepository.findByIsPublicTrueOrderByUpdatedAtDesc(pageable);
+
+        // 사용자 ID 수집 및 일괄 조회
+        Set<Long> userIds = miniatures.getContent().stream()
+                .map(Miniature::getUserId)
+                .collect(Collectors.toSet());
+
+        Map<Long, String> userNicknames = userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, User::getNickname));
+
+        // Response 변환
+        Page<PublicMiniatureResponse> responsePage = miniatures.map(miniature -> {
+            int progress = calculateProgress(miniature.getId());
+            String nickname = userNicknames.getOrDefault(miniature.getUserId(), "");
+            return PublicMiniatureResponse.of(miniature, progress, nickname);
+        });
+
+        return PublicMiniaturePageResponse.from(responsePage);
+    }
+
+    /**
+     * 공개 미니어처 상세 조회
+     */
+    public PublicMiniatureDetailResponse getPublicMiniatureDetail(Long miniatureId) {
+        // 1. 공개 미니어처 조회
+        Miniature miniature = miniatureRepository.findByIdAndIsPublicTrue(miniatureId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MINIATURE_NOT_FOUND));
+
+        // 2. 사용자 닉네임 조회
+        User user = userRepository.findById(miniature.getUserId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        // 3. BacklogItem 조회
+        List<BacklogItem> backlogItems = backlogItemRepository
+                .findByMiniatureIdOrderByOrderIndexAsc(miniatureId);
+
+        List<BacklogItemResponse> backlogItemResponses = backlogItems.stream()
+                .map(BacklogItemResponse::from)
+                .toList();
+
+        // 4. 진행률 계산
+        int progress = calculateProgress(miniatureId);
+
+        return PublicMiniatureDetailResponse.of(miniature, progress, user.getNickname(), backlogItemResponses);
     }
 
     /**

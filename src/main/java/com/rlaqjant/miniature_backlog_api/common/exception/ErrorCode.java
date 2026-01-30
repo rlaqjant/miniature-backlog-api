@@ -37,6 +37,7 @@ public enum ErrorCode {
 
     // 진행 로그 에러 (6xxx)
     PROGRESS_LOG_NOT_FOUND("E6000", "진행 로그를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
+    PROGRESS_LOG_ACCESS_DENIED("E6001", "해당 진행 로그에 접근 권한이 없습니다.", HttpStatus.FORBIDDEN),
 
     // 이미지 에러 (7xxx)
     IMAGE_NOT_FOUND("E7000", "이미지를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),

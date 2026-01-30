@@ -4,6 +4,7 @@ import com.rlaqjant.miniature_backlog_api.common.dto.ApiResponse;
 import com.rlaqjant.miniature_backlog_api.progresslog.dto.ProgressLogCreateRequest;
 import com.rlaqjant.miniature_backlog_api.progresslog.dto.ProgressLogPageResponse;
 import com.rlaqjant.miniature_backlog_api.progresslog.dto.ProgressLogResponse;
+import com.rlaqjant.miniature_backlog_api.progresslog.dto.ProgressLogUpdateRequest;
 import com.rlaqjant.miniature_backlog_api.progresslog.service.ProgressLogService;
 import com.rlaqjant.miniature_backlog_api.security.userdetails.CustomUserDetails;
 import jakarta.validation.Valid;
@@ -41,6 +42,21 @@ public class ProgressLogController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.success("진행 로그가 작성되었습니다.", response));
+    }
+
+    /**
+     * 진행 로그 수정
+     * PATCH /progress-logs/{id}
+     */
+    @PatchMapping("/{id}")
+    public ResponseEntity<ApiResponse<ProgressLogResponse>> updateProgressLog(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long id,
+            @Valid @RequestBody ProgressLogUpdateRequest request
+    ) {
+        ProgressLogResponse response = progressLogService.updateProgressLog(
+                userDetails.getUserId(), id, request);
+        return ResponseEntity.ok(ApiResponse.success("진행 로그가 수정되었습니다.", response));
     }
 
     /**

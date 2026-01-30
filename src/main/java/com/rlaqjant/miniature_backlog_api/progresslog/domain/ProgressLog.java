@@ -40,6 +40,14 @@ public class ProgressLog {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    /**
+     * 진행 로그 수정
+     */
+    public void update(String content, Boolean isPublic) {
+        if (content != null) this.content = content;
+        if (isPublic != null) this.isPublic = isPublic;
+    }
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();

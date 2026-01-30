@@ -10,6 +10,7 @@ import com.rlaqjant.miniature_backlog_api.progresslog.domain.ProgressLog;
 import com.rlaqjant.miniature_backlog_api.progresslog.dto.ProgressLogCreateRequest;
 import com.rlaqjant.miniature_backlog_api.progresslog.dto.ProgressLogPageResponse;
 import com.rlaqjant.miniature_backlog_api.progresslog.dto.ProgressLogResponse;
+import com.rlaqjant.miniature_backlog_api.progresslog.dto.ProgressLogUpdateRequest;
 import com.rlaqjant.miniature_backlog_api.progresslog.repository.ProgressLogRepository;
 import com.rlaqjant.miniature_backlog_api.user.domain.User;
 import com.rlaqjant.miniature_backlog_api.user.repository.UserRepository;
@@ -135,6 +136,69 @@ public class ProgressLogService {
         });
 
         return ProgressLogPageResponse.from(responsePage);
+    }
+
+    /**
+     * 공개 미니어처의 공개 진행 로그 조회
+     */
+    public ProgressLogPageResponse getPublicProgressLogsByMiniature(Long miniatureId, int page, int size) {
+        // 1. 공개 미니어처인지 확인
+        Miniature miniature = miniatureRepository.findById(miniatureId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MINIATURE_NOT_FOUND));
+
+        if (!miniature.getIsPublic()) {
+            throw new BusinessException(ErrorCode.MINIATURE_NOT_FOUND);
+        }
+
+        // 2. 사용자 닉네임 조회
+        User user = userRepository.findById(miniature.getUserId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        // 3. 해당 미니어처의 공개 진행 로그 조회
+        Pageable pageable = PageRequest.of(page, size);
+        Page<ProgressLog> progressLogs = progressLogRepository
+                .findByMiniatureIdAndIsPublicTrueOrderByCreatedAtDesc(miniatureId, pageable);
+
+        // 4. Response 변환 (공개 URL 사용)
+        Page<ProgressLogResponse> responsePage = progressLogs.map(progressLog -> {
+            List<ImageResponse> images = imageService.getImagesByProgressLogId(progressLog.getId(), true);
+            return ProgressLogResponse.of(progressLog, miniature.getTitle(), user.getNickname(), images);
+        });
+
+        return ProgressLogPageResponse.from(responsePage);
+    }
+
+    /**
+     * 진행 로그 수정
+     */
+    @Transactional
+    public ProgressLogResponse updateProgressLog(Long userId, Long logId, ProgressLogUpdateRequest request) {
+        // 1. 진행 로그 조회
+        ProgressLog progressLog = progressLogRepository.findById(logId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROGRESS_LOG_NOT_FOUND));
+
+        // 2. 소유권 검증
+        if (!progressLog.getUserId().equals(userId)) {
+            log.warn("진행 로그 접근 권한 없음: logId={}, ownerId={}, requesterId={}",
+                    logId, progressLog.getUserId(), userId);
+            throw new BusinessException(ErrorCode.PROGRESS_LOG_ACCESS_DENIED);
+        }
+
+        // 3. 수정
+        progressLog.update(request.getContent(), request.getIsPublic());
+
+        // 4. 미니어처 제목, 사용자 닉네임 조회
+        Miniature miniature = miniatureRepository.findById(progressLog.getMiniatureId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.MINIATURE_NOT_FOUND));
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        // 5. 이미지 포함하여 응답
+        List<ImageResponse> images = imageService.getImagesByProgressLogId(progressLog.getId());
+
+        log.info("진행 로그 수정: id={}, userId={}", logId, userId);
+        return ProgressLogResponse.of(progressLog, miniature.getTitle(), user.getNickname(), images);
     }
 
     /**

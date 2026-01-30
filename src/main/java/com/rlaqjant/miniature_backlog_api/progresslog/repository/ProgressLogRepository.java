@@ -25,6 +25,11 @@ public interface ProgressLogRepository extends JpaRepository<ProgressLog, Long> 
     Page<ProgressLog> findByIsPublicTrueOrderByCreatedAtDesc(Pageable pageable);
 
     /**
+     * 특정 미니어처의 공개 진행 로그 목록 조회 (페이지네이션)
+     */
+    Page<ProgressLog> findByMiniatureIdAndIsPublicTrueOrderByCreatedAtDesc(Long miniatureId, Pageable pageable);
+
+    /**
      * 미니어처 ID로 진행 로그 목록 조회
      */
     List<ProgressLog> findByMiniatureId(Long miniatureId);
