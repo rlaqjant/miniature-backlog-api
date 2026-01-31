@@ -1,8 +1,8 @@
 package com.rlaqjant.miniature_backlog_api.auth.controller;
 
+import com.rlaqjant.miniature_backlog_api.auth.dto.AuthResponse;
 import com.rlaqjant.miniature_backlog_api.auth.dto.LoginRequest;
 import com.rlaqjant.miniature_backlog_api.auth.dto.RegisterRequest;
-import com.rlaqjant.miniature_backlog_api.auth.dto.TokenResponse;
 import com.rlaqjant.miniature_backlog_api.auth.service.AuthService;
 import com.rlaqjant.miniature_backlog_api.common.dto.ApiResponse;
 import com.rlaqjant.miniature_backlog_api.common.exception.BusinessException;
@@ -46,39 +46,41 @@ public class AuthController {
     /**
      * 로그인
      * POST /auth/login
-     * 성공 시 JWT 토큰을 HttpOnly 쿠키로 전달
+     * 성공 시 JWT 토큰을 HttpOnly 쿠키로 전달, body에 사용자 정보 반환
      */
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<Void>> login(@Valid @RequestBody LoginRequest request) {
-        TokenResponse tokenResponse = authService.login(request);
+    public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
+        AuthService.LoginResult result = authService.login(request);
 
-        ResponseCookie cookie = jwtCookieUtil.createAccessTokenCookie(tokenResponse.getAccessToken());
+        ResponseCookie cookie = jwtCookieUtil.createAccessTokenCookie(
+                result.tokenResponse().getAccessToken());
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
-                .body(ApiResponse.success("로그인 성공", null));
+                .body(ApiResponse.success("로그인 성공", result.authResponse()));
     }
 
     /**
      * 토큰 갱신
      * POST /auth/refresh
-     * 쿠키에서 토큰을 읽어 갱신 후 새 쿠키로 전달
+     * 쿠키에서 토큰을 읽어 갱신 후 새 쿠키로 전달, body에 사용자 정보 반환
      */
     @PostMapping("/refresh")
-    public ResponseEntity<ApiResponse<Void>> refresh(HttpServletRequest request) {
+    public ResponseEntity<ApiResponse<AuthResponse>> refresh(HttpServletRequest request) {
         String token = jwtCookieUtil.getTokenFromCookies(request);
 
         if (token == null || token.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_TOKEN);
         }
 
-        TokenResponse tokenResponse = authService.refresh(token);
+        AuthService.LoginResult result = authService.refresh(token);
 
-        ResponseCookie cookie = jwtCookieUtil.createAccessTokenCookie(tokenResponse.getAccessToken());
+        ResponseCookie cookie = jwtCookieUtil.createAccessTokenCookie(
+                result.tokenResponse().getAccessToken());
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
-                .body(ApiResponse.success("토큰 갱신 성공", null));
+                .body(ApiResponse.success("토큰 갱신 성공", result.authResponse()));
     }
 
     /**

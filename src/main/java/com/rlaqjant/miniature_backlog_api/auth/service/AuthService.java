@@ -1,8 +1,6 @@
 package com.rlaqjant.miniature_backlog_api.auth.service;
 
-import com.rlaqjant.miniature_backlog_api.auth.dto.LoginRequest;
-import com.rlaqjant.miniature_backlog_api.auth.dto.RegisterRequest;
-import com.rlaqjant.miniature_backlog_api.auth.dto.TokenResponse;
+import com.rlaqjant.miniature_backlog_api.auth.dto.*;
 import com.rlaqjant.miniature_backlog_api.common.exception.BusinessException;
 import com.rlaqjant.miniature_backlog_api.common.exception.ErrorCode;
 import com.rlaqjant.miniature_backlog_api.security.jwt.JwtTokenProvider;
@@ -50,8 +48,9 @@ public class AuthService {
 
     /**
      * 로그인
+     * @return 토큰 + 사용자 정보
      */
-    public TokenResponse login(LoginRequest request) {
+    public LoginResult login(LoginRequest request) {
         // 사용자 조회
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
@@ -66,15 +65,19 @@ public class AuthService {
 
         log.info("로그인 성공: {}", request.getEmail());
 
-        return TokenResponse.builder()
+        TokenResponse tokenResponse = TokenResponse.builder()
                 .accessToken(accessToken)
                 .build();
+        AuthResponse authResponse = AuthResponse.of(UserInfoResponse.from(user));
+
+        return new LoginResult(tokenResponse, authResponse);
     }
 
     /**
      * 토큰 갱신
+     * @return 토큰 + 사용자 정보
      */
-    public TokenResponse refresh(String token) {
+    public LoginResult refresh(String token) {
         // 1. 갱신 가능 여부 확인
         if (!jwtTokenProvider.canRefresh(token)) {
             throw new BusinessException(ErrorCode.INVALID_TOKEN);
@@ -83,18 +86,26 @@ public class AuthService {
         // 2. 토큰에서 이메일 추출
         String email = jwtTokenProvider.getEmailFromExpiredToken(token);
 
-        // 3. 사용자 존재 여부 확인
-        if (!userRepository.existsByEmail(email)) {
-            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
-        }
+        // 3. 사용자 조회
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         // 4. 새 토큰 발급
         String newAccessToken = jwtTokenProvider.createAccessToken(email);
 
         log.info("토큰 갱신 완료: {}", email);
 
-        return TokenResponse.builder()
+        TokenResponse tokenResponse = TokenResponse.builder()
                 .accessToken(newAccessToken)
                 .build();
+        AuthResponse authResponse = AuthResponse.of(UserInfoResponse.from(user));
+
+        return new LoginResult(tokenResponse, authResponse);
+    }
+
+    /**
+     * 로그인/갱신 결과 (토큰 + 사용자 정보)
+     */
+    public record LoginResult(TokenResponse tokenResponse, AuthResponse authResponse) {
     }
 }

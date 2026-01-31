@@ -198,6 +198,43 @@ public class MiniatureService {
     }
 
     /**
+     * 관리자용 미니어처 삭제 (소유권 검증 없음)
+     */
+    @Transactional
+    public void deleteMiniatureForAdmin(Long miniatureId) {
+        Miniature miniature = miniatureRepository.findById(miniatureId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MINIATURE_NOT_FOUND));
+
+        // ProgressLog 목록 조회 → progressLogIds 수집
+        List<ProgressLog> progressLogs = progressLogRepository.findByMiniatureId(miniatureId);
+        List<Long> progressLogIds = progressLogs.stream()
+                .map(ProgressLog::getId)
+                .toList();
+
+        // Image 목록 조회 → objectKeys 수집
+        List<String> objectKeysToDelete = new ArrayList<>();
+        if (!progressLogIds.isEmpty()) {
+            List<Image> images = imageRepository.findByProgressLogIdIn(progressLogIds);
+            objectKeysToDelete = images.stream()
+                    .map(Image::getObjectKey)
+                    .toList();
+            imageRepository.deleteByProgressLogIdIn(progressLogIds);
+        }
+
+        progressLogRepository.deleteByMiniatureId(miniatureId);
+        backlogItemRepository.deleteByMiniatureId(miniatureId);
+        miniatureRepository.delete(miniature);
+
+        // R2 오브젝트 삭제 (best-effort)
+        if (!objectKeysToDelete.isEmpty()) {
+            imageService.deleteR2Objects(objectKeysToDelete);
+        }
+
+        log.info("관리자 미니어처 삭제 완료: miniatureId={}, R2 대상 오브젝트 {}건",
+                miniatureId, objectKeysToDelete.size());
+    }
+
+    /**
      * 공개 미니어처 목록 조회 (페이지네이션)
      */
     public PublicMiniaturePageResponse getPublicMiniatures(int page, int size) {

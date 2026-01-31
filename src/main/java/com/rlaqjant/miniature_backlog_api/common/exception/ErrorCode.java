@@ -27,6 +27,7 @@ public enum ErrorCode {
     USER_NOT_FOUND("E3000", "사용자를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
     DUPLICATE_EMAIL("E3001", "이미 사용 중인 이메일입니다.", HttpStatus.CONFLICT),
     INVALID_PASSWORD("E3002", "비밀번호가 올바르지 않습니다.", HttpStatus.BAD_REQUEST),
+    ADMIN_DELETE_NOT_ALLOWED("E3003", "관리자 계정은 삭제할 수 없습니다.", HttpStatus.BAD_REQUEST),
 
     // 미니어처 에러 (4xxx)
     MINIATURE_NOT_FOUND("E4000", "미니어처를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),

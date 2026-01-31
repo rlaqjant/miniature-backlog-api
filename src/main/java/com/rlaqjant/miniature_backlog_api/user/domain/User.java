@@ -29,11 +29,23 @@ public class User {
     @Column(nullable = false, length = 50)
     private String nickname;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private UserRole role = UserRole.USER;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    /**
+     * 역할 변경
+     */
+    public void updateRole(UserRole role) {
+        this.role = role;
+    }
 
     @PrePersist
     protected void onCreate() {

@@ -2,6 +2,7 @@ package com.rlaqjant.miniature_backlog_api.config;
 
 import com.rlaqjant.miniature_backlog_api.security.handler.JwtAuthenticationEntryPoint;
 import com.rlaqjant.miniature_backlog_api.security.jwt.JwtAuthenticationFilter;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -42,9 +43,19 @@ public class SecurityConfig {
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-                // 인증 예외 핸들러
-                .exceptionHandling(exception ->
-                        exception.authenticationEntryPoint(jwtAuthenticationEntryPoint))
+                // 인증/인가 예외 핸들러
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)
+                        .accessDeniedHandler((request, response, accessDeniedException) -> {
+                            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                            response.setContentType("application/json");
+                            response.setCharacterEncoding("UTF-8");
+                            String timestamp = java.time.LocalDateTime.now()
+                                    .format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+                            response.getWriter().write(
+                                    "{\"success\":false,\"error\":{\"code\":\"E2001\",\"message\":\"접근 권한이 없습니다.\"},\"timestamp\":\"" + timestamp + "\"}"
+                            );
+                        }))
 
                 // 접근 제어 정책
                 .authorizeHttpRequests(authorize -> authorize
@@ -52,6 +63,8 @@ public class SecurityConfig {
                         .requestMatchers("/health").permitAll()
                         .requestMatchers("/auth/**").permitAll()
                         .requestMatchers("/public/**").permitAll()
+                        // 관리자 전용 엔드포인트
+                        .requestMatchers("/admin/**").hasRole("ADMIN")
                         // 나머지는 인증 필요
                         .anyRequest().authenticated()
                 )
