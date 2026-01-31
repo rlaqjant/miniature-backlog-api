@@ -22,6 +22,8 @@ public class PublicMiniatureDetailResponse {
     private Boolean isPublic;
     private Integer progress;
     private String userNickname;
+    private Long likeCount;
+    private Boolean liked;
     private List<BacklogItemResponse> backlogItems;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -30,7 +32,9 @@ public class PublicMiniatureDetailResponse {
             Miniature miniature,
             int progress,
             String userNickname,
-            List<BacklogItemResponse> backlogItems
+            List<BacklogItemResponse> backlogItems,
+            long likeCount,
+            boolean liked
     ) {
         return PublicMiniatureDetailResponse.builder()
                 .id(miniature.getId())
@@ -39,6 +43,8 @@ public class PublicMiniatureDetailResponse {
                 .isPublic(miniature.getIsPublic())
                 .progress(progress)
                 .userNickname(userNickname)
+                .likeCount(likeCount)
+                .liked(liked)
                 .backlogItems(backlogItems)
                 .createdAt(miniature.getCreatedAt())
                 .updatedAt(miniature.getUpdatedAt())

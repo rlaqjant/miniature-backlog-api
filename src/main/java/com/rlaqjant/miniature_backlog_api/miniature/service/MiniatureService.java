@@ -9,6 +9,7 @@ import com.rlaqjant.miniature_backlog_api.common.exception.ErrorCode;
 import com.rlaqjant.miniature_backlog_api.image.domain.Image;
 import com.rlaqjant.miniature_backlog_api.image.repository.ImageRepository;
 import com.rlaqjant.miniature_backlog_api.image.service.ImageService;
+import com.rlaqjant.miniature_backlog_api.like.repository.MiniatureLikeRepository;
 import com.rlaqjant.miniature_backlog_api.miniature.domain.Miniature;
 import com.rlaqjant.miniature_backlog_api.miniature.dto.*;
 import com.rlaqjant.miniature_backlog_api.miniature.repository.MiniatureRepository;
@@ -42,6 +43,7 @@ public class MiniatureService {
     private final ImageRepository imageRepository;
     private final ImageService imageService;
     private final UserRepository userRepository;
+    private final MiniatureLikeRepository miniatureLikeRepository;
 
     // 기본 백로그 항목 이름
     private static final List<String> DEFAULT_BACKLOG_STEPS = Arrays.asList(
@@ -185,7 +187,10 @@ public class MiniatureService {
         // 4-3. DB 삭제: BacklogItem
         backlogItemRepository.deleteByMiniatureId(miniatureId);
 
-        // 4-4. DB 삭제: Miniature
+        // 4-4. DB 삭제: MiniatureLike
+        miniatureLikeRepository.deleteByMiniatureId(miniatureId);
+
+        // 4-5. DB 삭제: Miniature
         miniatureRepository.delete(miniature);
 
         // 5. R2 오브젝트 삭제 (best-effort, 실패해도 DB 삭제 유지)
@@ -223,6 +228,7 @@ public class MiniatureService {
 
         progressLogRepository.deleteByMiniatureId(miniatureId);
         backlogItemRepository.deleteByMiniatureId(miniatureId);
+        miniatureLikeRepository.deleteByMiniatureId(miniatureId);
         miniatureRepository.delete(miniature);
 
         // R2 오브젝트 삭제 (best-effort)
@@ -235,9 +241,10 @@ public class MiniatureService {
     }
 
     /**
-     * 공개 미니어처 목록 조회 (페이지네이션)
+     * 공개 미니어처 목록 조회 (페이지네이션, 좋아요 정보 포함)
+     * @param userId 현재 로그인 사용자 ID (null이면 비로그인)
      */
-    public PublicMiniaturePageResponse getPublicMiniatures(int page, int size) {
+    public PublicMiniaturePageResponse getPublicMiniatures(int page, int size, Long userId) {
         Pageable pageable = PageRequest.of(page, size);
         Page<Miniature> miniatures = miniatureRepository.findByIsPublicTrueOrderByUpdatedAtDesc(pageable);
 
@@ -249,20 +256,43 @@ public class MiniatureService {
         Map<Long, String> userNicknames = userRepository.findAllById(userIds).stream()
                 .collect(Collectors.toMap(User::getId, User::getNickname));
 
+        // 미니어처 ID 목록
+        List<Long> miniatureIds = miniatures.getContent().stream()
+                .map(Miniature::getId)
+                .toList();
+
+        // 좋아요 수 일괄 조회 (N+1 방지)
+        Map<Long, Long> likeCountMap = new HashMap<>();
+        if (!miniatureIds.isEmpty()) {
+            miniatureLikeRepository.countByMiniatureIdIn(miniatureIds)
+                    .forEach(row -> likeCountMap.put((Long) row[0], (Long) row[1]));
+        }
+
+        // 사용자가 좋아요한 미니어처 목록 일괄 조회
+        Set<Long> likedMiniatureIds = new HashSet<>();
+        if (userId != null && !miniatureIds.isEmpty()) {
+            likedMiniatureIds.addAll(
+                    miniatureLikeRepository.findMiniatureIdsByUserIdAndMiniatureIdIn(userId, miniatureIds)
+            );
+        }
+
         // Response 변환
         Page<PublicMiniatureResponse> responsePage = miniatures.map(miniature -> {
             int progress = calculateProgress(miniature.getId());
             String nickname = userNicknames.getOrDefault(miniature.getUserId(), "");
-            return PublicMiniatureResponse.of(miniature, progress, nickname);
+            long likeCount = likeCountMap.getOrDefault(miniature.getId(), 0L);
+            boolean liked = likedMiniatureIds.contains(miniature.getId());
+            return PublicMiniatureResponse.of(miniature, progress, nickname, likeCount, liked);
         });
 
         return PublicMiniaturePageResponse.from(responsePage);
     }
 
     /**
-     * 공개 미니어처 상세 조회
+     * 공개 미니어처 상세 조회 (좋아요 정보 포함)
+     * @param userId 현재 로그인 사용자 ID (null이면 비로그인)
      */
-    public PublicMiniatureDetailResponse getPublicMiniatureDetail(Long miniatureId) {
+    public PublicMiniatureDetailResponse getPublicMiniatureDetail(Long miniatureId, Long userId) {
         // 1. 공개 미니어처 조회
         Miniature miniature = miniatureRepository.findByIdAndIsPublicTrue(miniatureId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MINIATURE_NOT_FOUND));
@@ -282,7 +312,11 @@ public class MiniatureService {
         // 4. 진행률 계산
         int progress = calculateProgress(miniatureId);
 
-        return PublicMiniatureDetailResponse.of(miniature, progress, user.getNickname(), backlogItemResponses);
+        // 5. 좋아요 정보 조회
+        long likeCount = miniatureLikeRepository.countByMiniatureId(miniatureId);
+        boolean liked = userId != null && miniatureLikeRepository.existsByUserIdAndMiniatureId(userId, miniatureId);
+
+        return PublicMiniatureDetailResponse.of(miniature, progress, user.getNickname(), backlogItemResponses, likeCount, liked);
     }
 
     /**

@@ -42,7 +42,10 @@ public enum ErrorCode {
 
     // 이미지 에러 (7xxx)
     IMAGE_NOT_FOUND("E7000", "이미지를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
-    IMAGE_UPLOAD_FAILED("E7001", "이미지 업로드에 실패했습니다.", HttpStatus.INTERNAL_SERVER_ERROR);
+    IMAGE_UPLOAD_FAILED("E7001", "이미지 업로드에 실패했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
+
+    // 좋아요 에러 (8xxx)
+    LIKE_NOT_PUBLIC_MINIATURE("E8000", "공개되지 않은 미니어처에는 좋아요할 수 없습니다.", HttpStatus.BAD_REQUEST);
 
     private final String code;
     private final String message;
