@@ -55,7 +55,7 @@ public class MiniatureService {
     );
 
     /**
-     * 내 백로그 목록 조회 (N+1 → 2쿼리 최적화)
+     * 내 백로그 목록 조회 (N+1 → 일괄 조회 최적화)
      */
     public List<MiniatureResponse> getMyMiniatures(Long userId) {
         List<Miniature> miniatures = miniatureRepository.findByUserIdOrderByCreatedAtDesc(userId);
@@ -70,13 +70,17 @@ public class MiniatureService {
                 .stream()
                 .collect(Collectors.groupingBy(BacklogItem::getMiniatureId));
 
+        // 미니어처별 최신 썸네일 일괄 조회
+        Map<Long, String> thumbnailMap = buildThumbnailMap(miniatureIds, false);
+
         return miniatures.stream()
                 .map(miniature -> {
                     List<BacklogItem> items = backlogItemsMap.getOrDefault(
                             miniature.getId(), Collections.emptyList());
                     int progress = calculateProgressFromItems(items);
                     String currentStep = calculateCurrentStep(items);
-                    return MiniatureResponse.of(miniature, progress, currentStep);
+                    String thumbnailUrl = thumbnailMap.get(miniature.getId());
+                    return MiniatureResponse.of(miniature, progress, currentStep, thumbnailUrl);
                 })
                 .toList();
     }
@@ -276,13 +280,17 @@ public class MiniatureService {
             );
         }
 
+        // 미니어처별 최신 공개 썸네일 일괄 조회
+        Map<Long, String> thumbnailMap = buildThumbnailMap(miniatureIds, true);
+
         // Response 변환
         Page<PublicMiniatureResponse> responsePage = miniatures.map(miniature -> {
             int progress = calculateProgress(miniature.getId());
             String nickname = userNicknames.getOrDefault(miniature.getUserId(), "");
             long likeCount = likeCountMap.getOrDefault(miniature.getId(), 0L);
             boolean liked = likedMiniatureIds.contains(miniature.getId());
-            return PublicMiniatureResponse.of(miniature, progress, nickname, likeCount, liked);
+            String thumbnailUrl = thumbnailMap.get(miniature.getId());
+            return PublicMiniatureResponse.of(miniature, progress, nickname, likeCount, liked, thumbnailUrl);
         });
 
         return PublicMiniaturePageResponse.from(responsePage);
@@ -386,7 +394,7 @@ public class MiniatureService {
         // 4. Response 생성
         int progress = calculateProgressFromItems(items);
         String currentStep = calculateCurrentStep(items);
-        return MiniatureResponse.of(miniature, progress, currentStep);
+        return MiniatureResponse.of(miniature, progress, currentStep, null);
     }
 
     /**
@@ -444,6 +452,32 @@ public class MiniatureService {
         }
         // 연속 DONE 마지막 아이템의 stepName 반환
         return items.get(consecutiveDone - 1).getStepName();
+    }
+
+    /**
+     * 미니어처별 최신 썸네일 URL 맵 생성
+     * @param miniatureIds 미니어처 ID 목록
+     * @param publicOnly true: 공개 로그의 이미지만, false: 모든 이미지
+     */
+    private Map<Long, String> buildThumbnailMap(List<Long> miniatureIds, boolean publicOnly) {
+        if (miniatureIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        List<Object[]> rows = publicOnly
+                ? imageRepository.findLatestPublicImageByMiniatureIds(miniatureIds)
+                : imageRepository.findLatestImageByMiniatureIds(miniatureIds);
+
+        Map<Long, String> thumbnailMap = new HashMap<>();
+        for (Object[] row : rows) {
+            Long miniatureId = ((Number) row[0]).longValue();
+            String objectKey = (String) row[1];
+            String url = publicOnly
+                    ? imageService.generatePublicUrl(objectKey)
+                    : imageService.generateReadPresignedUrl(objectKey);
+            thumbnailMap.put(miniatureId, url);
+        }
+        return thumbnailMap;
     }
 
     /**

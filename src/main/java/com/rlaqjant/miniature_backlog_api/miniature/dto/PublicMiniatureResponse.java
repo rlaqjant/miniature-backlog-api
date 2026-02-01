@@ -21,13 +21,14 @@ public class PublicMiniatureResponse {
     private String userNickname;
     private Long likeCount;
     private Boolean liked;
+    private String thumbnailUrl;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
     /**
-     * Entity + 진행률 + 작성자 닉네임 + 좋아요 정보로 Response 생성
+     * Entity + 진행률 + 작성자 닉네임 + 좋아요 정보 + 썸네일 URL로 Response 생성
      */
-    public static PublicMiniatureResponse of(Miniature miniature, int progress, String userNickname, long likeCount, boolean liked) {
+    public static PublicMiniatureResponse of(Miniature miniature, int progress, String userNickname, long likeCount, boolean liked, String thumbnailUrl) {
         return PublicMiniatureResponse.builder()
                 .id(miniature.getId())
                 .title(miniature.getTitle())
@@ -36,6 +37,7 @@ public class PublicMiniatureResponse {
                 .userNickname(userNickname)
                 .likeCount(likeCount)
                 .liked(liked)
+                .thumbnailUrl(thumbnailUrl)
                 .createdAt(miniature.getCreatedAt())
                 .updatedAt(miniature.getUpdatedAt())
                 .build();
