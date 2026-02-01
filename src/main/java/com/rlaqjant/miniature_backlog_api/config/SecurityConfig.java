@@ -59,6 +59,8 @@ public class SecurityConfig {
 
                 // 접근 제어 정책
                 .authorizeHttpRequests(authorize -> authorize
+                        // 닉네임 설정은 인증 필요 (auth/** permitAll보다 먼저 선언)
+                        .requestMatchers("/auth/nickname").authenticated()
                         // 공개 엔드포인트
                         .requestMatchers("/health").permitAll()
                         .requestMatchers("/auth/**").permitAll()

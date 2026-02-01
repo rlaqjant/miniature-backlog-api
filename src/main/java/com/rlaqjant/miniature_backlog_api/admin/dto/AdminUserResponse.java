@@ -17,6 +17,7 @@ public class AdminUserResponse {
     private String email;
     private String nickname;
     private String role;
+    private String provider;
     private LocalDateTime createdAt;
     private long miniatureCount;
 
@@ -26,6 +27,7 @@ public class AdminUserResponse {
                 .email(user.getEmail())
                 .nickname(user.getNickname())
                 .role(user.getRole().name())
+                .provider(user.getProvider())
                 .createdAt(user.getCreatedAt())
                 .miniatureCount(miniatureCount)
                 .build();

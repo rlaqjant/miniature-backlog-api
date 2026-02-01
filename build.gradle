@@ -39,6 +39,9 @@ dependencies {
 	// Validation
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 
+	// Google OAuth (ID 토큰 검증)
+	implementation 'com.google.api-client:google-api-client:2.7.0'
+
 	// AWS SDK for S3 (Cloudflare R2 compatible)
 	implementation platform('software.amazon.awssdk:bom:2.25.0')
 	implementation 'software.amazon.awssdk:s3'

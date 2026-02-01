@@ -45,4 +45,14 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * 닉네임으로 사용자 목록 조회 (미니어처 검색 시 userId 추출용) - 관리자용
      */
     List<User> findByNicknameContainingIgnoreCase(String nickname);
+
+    /**
+     * OAuth 프로바이더 + 프로바이더 ID로 사용자 조회
+     */
+    Optional<User> findByProviderAndProviderId(String provider, String providerId);
+
+    /**
+     * 닉네임 존재 여부 확인
+     */
+    boolean existsByNickname(String nickname);
 }

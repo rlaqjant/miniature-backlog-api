@@ -18,6 +18,7 @@ public class UserInfoResponse {
     private String email;
     private String nickname;
     private String role;
+    private String provider;
     private LocalDateTime createdAt;
 
     public static UserInfoResponse from(User user) {
@@ -26,6 +27,7 @@ public class UserInfoResponse {
                 .email(user.getEmail())
                 .nickname(user.getNickname())
                 .role(user.getRole().name())
+                .provider(user.getProvider())
                 .createdAt(user.getCreatedAt())
                 .build();
     }

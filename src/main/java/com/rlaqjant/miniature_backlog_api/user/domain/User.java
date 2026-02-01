@@ -23,11 +23,18 @@ public class User {
     @Column(nullable = false, unique = true, length = 255)
     private String email;
 
-    @Column(nullable = false, length = 255)
+    @Column(length = 255)
     private String password;
 
-    @Column(nullable = false, length = 50)
+    @Column(length = 50)
     private String nickname;
+
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private String provider = "LOCAL";
+
+    @Column(name = "provider_id", length = 255)
+    private String providerId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -45,6 +52,13 @@ public class User {
      */
     public void updateRole(UserRole role) {
         this.role = role;
+    }
+
+    /**
+     * 닉네임 설정
+     */
+    public void updateNickname(String nickname) {
+        this.nickname = nickname;
     }
 
     @PrePersist

@@ -22,12 +22,16 @@ public enum ErrorCode {
     ACCESS_DENIED("E2001", "접근 권한이 없습니다.", HttpStatus.FORBIDDEN),
     INVALID_TOKEN("E2002", "유효하지 않은 토큰입니다.", HttpStatus.UNAUTHORIZED),
     EXPIRED_TOKEN("E2003", "만료된 토큰입니다.", HttpStatus.UNAUTHORIZED),
+    GOOGLE_AUTH_FAILED("E2004", "Google 인증에 실패했습니다.", HttpStatus.UNAUTHORIZED),
 
     // 사용자 에러 (3xxx)
     USER_NOT_FOUND("E3000", "사용자를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
     DUPLICATE_EMAIL("E3001", "이미 사용 중인 이메일입니다.", HttpStatus.CONFLICT),
     INVALID_PASSWORD("E3002", "비밀번호가 올바르지 않습니다.", HttpStatus.BAD_REQUEST),
     ADMIN_DELETE_NOT_ALLOWED("E3003", "관리자 계정은 삭제할 수 없습니다.", HttpStatus.BAD_REQUEST),
+    NICKNAME_REQUIRED("E3004", "닉네임 설정이 필요합니다.", HttpStatus.BAD_REQUEST),
+    DUPLICATE_NICKNAME("E3006", "이미 사용 중인 닉네임입니다.", HttpStatus.CONFLICT),
+    EMAIL_ALREADY_EXISTS_WITH_DIFFERENT_PROVIDER("E3007", "해당 이메일은 다른 가입 방식으로 이미 등록되어 있습니다.", HttpStatus.CONFLICT),
 
     // 미니어처 에러 (4xxx)
     MINIATURE_NOT_FOUND("E4000", "미니어처를 찾을 수 없습니다.", HttpStatus.NOT_FOUND),

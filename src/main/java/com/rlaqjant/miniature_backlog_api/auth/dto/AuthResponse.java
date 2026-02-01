@@ -13,9 +13,20 @@ public class AuthResponse {
 
     private UserInfoResponse user;
 
+    /** Google OAuth 신규 가입 시 닉네임 설정 필요 여부 */
+    @Builder.Default
+    private boolean needsNickname = false;
+
     public static AuthResponse of(UserInfoResponse userInfo) {
         return AuthResponse.builder()
                 .user(userInfo)
+                .build();
+    }
+
+    public static AuthResponse ofNeedsNickname(UserInfoResponse userInfo) {
+        return AuthResponse.builder()
+                .user(userInfo)
+                .needsNickname(true)
                 .build();
     }
 }
